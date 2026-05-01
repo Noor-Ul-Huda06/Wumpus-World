@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wumpus World — Logic Agent</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #f3f0f7;           /* Light lavender background */
+    --panel: #ffffff;        /* White panels */
+    --panel2: #f9f7fd;       /* Very light purple offset */
+    --border: #d1c4e9;       /* Soft purple border */
+    --accent: #ac9adb;       /* Vibrant purple accent */
+    --accent2: #b39ddb;      /* Muted lavender */
+    --safe: #4caf50;         /* Keep green for safe */
+    --danger: #ff5252;       /* Keep red for danger */
+    --unknown: #ede7f6;      /* Lightest purple for fog of war */
+    --visited: #d1c4e9;      /* Medium lavender for visited */
+    --agent: #fcf4c8;        /* Gold for agent contrast */
+    --text: #311b92;         /* Deep indigo text */
+    --dim: #a68dd1;          /* Muted purple text */
+    --glow: 0 0 15px rgba(124, 77, 255, 0.3);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  header {
+    text-align: center;
+    padding: 15px;
+    border-bottom: 2px solid var(--border);
+    background: white;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  }
+
+  header h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.8rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-shadow: var(--glow);
+  }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 300px;
+    height: calc(100vh - 75px);
+  }
+
+  .panel {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .panel-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    color: var(--accent);
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel2);
+    font-weight: bold;
+  }
+
+  .controls { padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+  
+  .ctrl-group label {
+    font-size: 0.65rem;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-weight: bold;
+  }
+
+  input, select {
+    background: white;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px;
+    width: 100%;
+    margin-top: 3px;
+    border-radius: 4px;
+  }
+
+  .btn {
+    padding: 10px;
+    border: 2px solid var(--accent);
+    background: white;
+    color: var(--accent);
+    font-family: 'Orbitron', sans-serif;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: bold;
+    transition: 0.3s;
+    border-radius: 4px;
+  }
+
+  .btn:hover { background: var(--accent); color: #fff; }
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+
+  .grid-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: radial-gradient(circle, #ffffff 0%, #f3f0f7 100%);
+  }
+
+  #grid-container {
+    display: grid;
+    gap: 6px;
+    padding: 25px;
+    background: rgba(255,255,255,0.5);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(124, 77, 255, 0.1);
+  }
+
+  .cell {
+    width: 65px;
+    height: 65px;
+    border: 1px solid var(--border);
+    background: var(--unknown);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    font-size: 1.5rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .cell.visited { background: var(--visited); border-color: var(--accent2); }
+  .cell.safe { border: 2px solid var(--safe); box-shadow: 0 0 8px rgba(76, 175, 80, 0.3); }
+  .cell.agent { border: 3px solid var(--agent); background: #fffde7; z-index: 2; transform: scale(1.05); }
+  
+  .cell-label {
+    position: absolute;
+    top: 4px; left: 4px;
+    font-size: 0.55rem;
+    color: var(--dim);
+    font-family: 'Share Tech Mono';
+  }
+
+  .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+  .metric-box { background: var(--panel); padding: 15px; text-align: center; }
+  .metric-value { font-family: 'Orbitron'; font-size: 1.4rem; color: var(--accent); }
+  .metric-label { font-size: 0.6rem; color: var(--dim); letter-spacing: 1px; }
+
+  .kb-log {
+    flex: 1;
+    padding: 15px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    overflow-y: auto;
+    color: var(--text);
+    background: var(--panel2);
+  }
+
+  .log-entry { 
+    margin-bottom: 6px; 
+    border-left: 3px solid var(--accent2); 
+    padding: 5px 8px; 
+    background: white;
+    border-radius: 0 4px 4px 0;
+  }
+  .log-entry.warn { border-color: var(--danger); color: var(--danger); }
+  .log-entry.success { border-color: var(--safe); color: var(--safe); }
+
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(49, 27, 146, 0.9);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+  }
+  #overlay.show { display: flex; }
+  #overlay h1 { margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⟨ WUMPUS WORLD ⟩</h1>
+</header>
+
+<div class="main-layout">
+  <div class="panel">
+    <div class="panel-title">ENV CONFIG</div>
+    <div class="controls">
+      <div class="ctrl-group">
+        <label>GRID SIZE</label>
+        <input type="number" id="gridSize" value="4" min="3" max="8">
+      </div>
+      <div class="ctrl-group">
+        <label>PITS</label>
+        <input type="number" id="pitCount" value="3">
+      </div>
+      <button class="btn" onclick="initGame()">NEW EPISODE</button>
+      <hr style="border:0; border-top:1px solid var(--border); margin:10px 0;">
+      <button class="btn" id="btnAuto" onclick="startAuto()">RUN AUTO-AGENT</button>
+      <button class="btn btn-danger" onclick="stopAuto()">STOP</button>
+    </div>
+  </div>
+
+  <div class="grid-area">
+    <div id="grid-container"></div>
+  </div>
+
+  <div class="panel" style="border-right:0; border-left:1px solid var(--border)">
+    <div class="panel-title">METRICS</div>
+    <div class="metrics-grid">
+      <div class="metric-box"><div class="metric-value" id="mMoves">0</div><div class="metric-label">MOVES</div></div>
+      <div class="metric-box"><div class="metric-value" id="mInfer">0</div><div class="metric-label">INFERENCES</div></div>
+    </div>
+    <div class="panel-title">KNOWLEDGE BASE</div>
+    <div class="kb-log" id="kbLog"></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <h1 id="overTitle" style="font-family:Orbitron; font-size:3rem;"></h1>
+  <button class="btn" onclick="initGame()">RESTART</button>
+</div>
+
+<script>
+/**
+ * WUMPUS WORLD LOGIC AGENT
+ * Uses Propositional Logic (Resolution Refutation) to solve the world.
+ */
+
+let G = {
+  size: 4,
+  agent: { r: 0, c: 0 },
+  wumpus: { r: 0, c: 0 },
+  gold: { r: 0, c: 0 },
+  pits: [],
+  visited: new Set(),
+  safe: new Set(),
+  gameOver: false,
+  moves: 0,
+  inferences: 0
+};
+
+let KB = []; // Array of clauses
+let knownFacts = new Map(); // Proven truths: "P1,1" -> false
+let autoInterval = null;
+
+// Initialization
+function initGame() {
+  stopAuto();
+  G.gameOver = false;
+  G.moves = 0;
+  G.inferences = 0;
+  G.size = parseInt(document.getElementById('gridSize').value);
+  G.agent = { r: 0, c: 0 };
+  G.visited = new Set();
+  G.safe = new Set(["0,0"]);
+  KB = [];
+  knownFacts = new Map();
+  document.getElementById('kbLog').innerHTML = '';
+  document.getElementById('overlay').classList.remove('show');
+
+  // Randomize Wumpus, Gold, Pits
+  const rand = () => Math.floor(Math.random() * G.size);
+  G.wumpus = { r: rand(), c: rand() };
+  G.gold = { r: rand(), c: rand() };
+  
+  // Ensure start is clear
+  if(G.wumpus.r === 0 && G.wumpus.c === 0) G.wumpus.r = 1;
+  if(G.gold.r === 0 && G.gold.c === 0) G.gold.c = 1;
+
+  G.pits = [];
+  const pCount = document.getElementById('pitCount').value;
+  for(let i=0; i<pCount; i++) {
+    let p = { r: rand(), c: rand() };
+    if((p.r!==0 || p.c!==0) && (p.r!==G.gold.r || p.c!==G.gold.c)) G.pits.push(p);
+  }
+
+  buildGrid();
+  updateLogic(0, 0);
+  render();
+}
+
+function buildGrid() {
+  const container = document.getElementById('grid-container');
+  container.innerHTML = '';
+  container.style.gridTemplateColumns = `repeat(${G.size}, 60px)`;
+  for(let r=0; r<G.size; r++) {
+    for(let c=0; c<G.size; c++) {
+      let cell = document.createElement('div');
+      cell.id = `cell-${r}-${c}`;
+      cell.className = 'cell';
+      cell.innerHTML = `<span class="cell-label">${r},${c}</span>`;
+      container.appendChild(cell);
+    }
+  }
+}
+
+// Logic Engine
+function updateLogic(r, c) {
+  const key = `${r},${c}`;
+  G.visited.add(key);
+  
+  // Percepts
+  const neighbors = getNeighbors(r, c);
+  const breeze = G.pits.some(p => neighbors.some(n => n.r === p.r && n.c === p.c));
+  const stench = neighbors.some(n => n.r === G.wumpus.r && n.c === G.wumpus.c);
+
+  logKB(`At (${r},${c}): ${breeze ? 'Breeze' : 'Clean'}, ${stench ? 'Stench' : 'Clean'}`);
+
+  // Knowledge: Current is Safe
+  knownFacts.set(`P${r}${c}`, false);
+  knownFacts.set(`W${r}${c}`, false);
+
+  if (!breeze) {
+    neighbors.forEach(n => {
+      knownFacts.set(`P${n.r}${n.c}`, false);
+      G.safe.add(`${n.r},${n.c}`);
+    });
+  }
+  if (!stench) {
+    neighbors.forEach(n => {
+      knownFacts.set(`W${n.r}${n.c}`, false);
+      if(!G.pits.some(p => p.r === n.r && p.c === n.c)) G.safe.add(`${n.r},${n.c}`);
+    });
+  }
+
+  G.inferences++;
+  document.getElementById('mInfer').innerText = G.inferences;
+}
+
+function getNeighbors(r, c) {
+  const n = [];
+  if (r > 0) n.push({r: r - 1, c});
+  if (r < G.size - 1) n.push({r: r + 1, c});
+  if (c > 0) n.push({r, c: c - 1});
+  if (c < G.size - 1) n.push({r, c: c + 1});
+  return n;
+}
+
+// Agent Navigation
+async function agentStep() {
+  if(G.gameOver) return;
+
+  // Check for Gold
+  if(G.agent.r === G.gold.r && G.agent.c === G.gold.c) {
+    endGame("YOU FOUND THE GOLD!", "success");
+    return;
+  }
+
+  // Strategy: Find an unvisited cell that is proven safe
+  const neighbors = getNeighbors(G.agent.r, G.agent.c);
+  
+  // 1. Prioritize unvisited safe neighbors
+  let target = neighbors.find(n => G.safe.has(`${n.r},${n.c}`) && !G.visited.has(`${n.r},${n.c}`));
+
+  // 2. If no new safe neighbors, backtrack to a visited cell that has unvisited safe neighbors
+  if (!target) {
+    for (let pos of G.visited) {
+      let [vr, vc] = pos.split(',').map(Number);
+      let vn = getNeighbors(vr, vc);
+      target = vn.find(n => G.safe.has(`${n.r},${n.c}`) && !G.visited.has(`${n.r},${n.c}`));
+      if(target) break;
+    }
+  }
+
+  if (target) {
+    G.agent = { r: target.r, c: target.c };
+    G.moves++;
+    document.getElementById('mMoves').innerText = G.moves;
+    
+    // Check death
+    if (G.pits.some(p => p.r === G.agent.r && p.c === G.agent.c)) {
+      endGame("FELL IN A PIT", "warn");
+    } else if (G.agent.r === G.wumpus.r && G.agent.c === G.wumpus.c) {
+      endGame("EATEN BY WUMPUS", "warn");
+    } else {
+      updateLogic(G.agent.r, G.agent.c);
+    }
+  } else {
+    endGame("NO SAFE MOVES LEFT", "warn");
+  }
+  render();
+}
+
+function startAuto() {
+  if(autoInterval) return;
+  autoInterval = setInterval(agentStep, 400);
+  document.getElementById('btnAuto').innerText = "RUNNING...";
+}
+
+function stopAuto() {
+  clearInterval(autoInterval);
+  autoInterval = null;
+  document.getElementById('btnAuto').innerText = "RUN AUTO-AGENT";
+}
+
+function render() {
+  for(let r=0; r<G.size; r++) {
+    for(let c=0; c<G.size; c++) {
+      const el = document.getElementById(`cell-${r}-${c}`);
+      const key = `${r},${c}`;
+      el.className = 'cell';
+      el.innerHTML = `<span class="cell-label">${r},${c}</span>`;
+      
+      if (G.visited.has(key)) el.classList.add('visited');
+      if (G.safe.has(key)) el.classList.add('safe');
+      
+      if (G.agent.r === r && G.agent.c === c) {
+        el.classList.add('agent');
+        el.innerHTML += "🤖";
+      }
+    }
+  }
+}
+
+function logKB(msg) {
+  const log = document.getElementById('kbLog');
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerText = msg;
+  log.prepend(div);
+}
+
+function endGame(msg, type) {
+  G.gameOver = true;
+  stopAuto();
+  document.getElementById('overTitle').innerText = msg;
+  document.getElementById('overTitle').style.color = type === 'success' ? 'var(--safe)' : 'var(--danger)';
+  document.getElementById('overlay').classList.add('show');
+}
+
+// Start first game
+initGame();
+</script>
+</body>
+</html>
